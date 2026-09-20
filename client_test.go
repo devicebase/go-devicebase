@@ -1,32 +1,18 @@
 package devicebase
 
 import (
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
+	"time"
 )
-
-type mockServer struct {
-	server *httptest.Server
-	method string
-	path   string
-	body   map[string]any
-}
-
-func newMockServer(handler http.HandlerFunc) *mockServer {
-	return &mockServer{
-		server: httptest.NewServer(handler),
-	}
-}
 
 func TestNewClientDefaults(t *testing.T) {
 	t.Setenv("DEVICEBASE_API_KEY", "env-key")
+	t.Setenv(envBaseURL, "")
+
 	client := NewClient(WithSerial("device123"))
-	if client.serial != "device123" {
-		t.Errorf("serial = %q, want %q", client.serial, "device123")
+	if client.Serial() != "device123" {
+		t.Errorf("serial = %q, want %q", client.Serial(), "device123")
 	}
 	if client.http.apiKey != "env-key" {
 		t.Errorf("apiKey = %q, want %q", client.http.apiKey, "env-key")
@@ -34,357 +20,247 @@ func TestNewClientDefaults(t *testing.T) {
 	if client.http.baseURL != defaultBaseURL {
 		t.Errorf("baseURL = %q, want %q", client.http.baseURL, defaultBaseURL)
 	}
+	if client.http.hc.Timeout != defaultTimeout {
+		t.Errorf("timeout = %v, want %v", client.http.hc.Timeout, defaultTimeout)
+	}
+}
+
+func TestNewClientReadsBaseURLFromEnv(t *testing.T) {
+	t.Setenv(envAPIKey, "env-key")
+	t.Setenv(envBaseURL, "http://127.0.0.1:8000")
+
+	client := NewClient()
+	if client.http.baseURL != "http://127.0.0.1:8000" {
+		t.Errorf("baseURL = %q", client.http.baseURL)
+	}
 }
 
 func TestNewClientOverrides(t *testing.T) {
 	client := NewClient(
 		WithAPIKey("my-key"),
 		WithSerial("serial-1"),
-		WithBaseURL("http://localhost:8080"),
+		WithBaseURL("http://localhost:8080/"),
+		WithTimeout(5*time.Second),
 	)
 	if client.http.apiKey != "my-key" {
 		t.Errorf("apiKey = %q", client.http.apiKey)
 	}
-	if client.serial != "serial-1" {
-		t.Errorf("serial = %q", client.serial)
+	if client.Serial() != "serial-1" {
+		t.Errorf("serial = %q", client.Serial())
 	}
+	// A trailing slash would turn every appended path into "//v1/…".
 	if client.http.baseURL != "http://localhost:8080" {
-		t.Errorf("baseURL = %q", client.http.baseURL)
+		t.Errorf("baseURL = %q, want the trailing slash trimmed", client.http.baseURL)
+	}
+	if client.http.hc.Timeout != 5*time.Second {
+		t.Errorf("timeout = %v", client.http.hc.Timeout)
 	}
 }
 
-func TestGetDeviceInfo(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Errorf("Method = %q, want POST", r.Method)
-		}
-		if r.URL.Path != "/v1/deviceinfo/abc123" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{
-			"serial":  "abc123",
-			"status":  "online",
-			"brand":   "Samsung",
-		})
-	})
-	defer ms.server.Close()
+// A client can be built before the environment is ready; the missing key
+// surfaces from the first request instead of panicking at construction.
+func TestNewClientWithoutAKeyFailsOnFirstUse(t *testing.T) {
+	t.Setenv(envAPIKey, "")
+	t.Setenv(envBaseURL, "http://127.0.0.1:1")
 
-	client := NewClient(
-		WithAPIKey("key"),
-		WithSerial("abc123"),
-		WithBaseURL(ms.server.URL),
-	)
+	client := NewClient(WithSerial("s"))
+	if _, err := client.Back(); err == nil {
+		t.Fatal("expected an AuthenticationError")
+	}
+}
 
-	info, err := client.GetDeviceInfo()
+// --- Mobile actions -------------------------------------------------------
+
+const mobileSerial = "db-mttul4i41di8"
+
+func mobileCases() []callCase {
+	return []callCase{
+		{
+			name:       "get device info",
+			call:       func(c *Client) error { _, err := c.GetDeviceInfo(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/deviceinfo/" + mobileSerial,
+		},
+		{
+			name:       "tap",
+			call:       func(c *Client) error { _, err := c.Tap(100, 200); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/tap/" + mobileSerial,
+			wantBody:   `{"x":100,"y":200}`,
+		},
+		{
+			name:       "double tap",
+			call:       func(c *Client) error { _, err := c.DoubleTap(10, 20); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/double_tap/" + mobileSerial,
+			wantBody:   `{"x":10,"y":20}`,
+		},
+		{
+			name:       "long press",
+			call:       func(c *Client) error { _, err := c.LongPress(30, 40); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/long_press/" + mobileSerial,
+			wantBody:   `{"x":30,"y":40}`,
+		},
+		{
+			name:       "swipe",
+			call:       func(c *Client) error { _, err := c.Swipe(0, 100, 300, 100); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/swipe/" + mobileSerial,
+			wantBody:   `{"x1":0,"y1":100,"x2":300,"y2":100}`,
+		},
+		{
+			name:       "back",
+			call:       func(c *Client) error { _, err := c.Back(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/back/" + mobileSerial,
+		},
+		{
+			name:       "home",
+			call:       func(c *Client) error { _, err := c.Home(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/home/" + mobileSerial,
+		},
+		{
+			name:       "launch app",
+			call:       func(c *Client) error { _, err := c.LaunchApp("com.tencent.mm"); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/launch_app/" + mobileSerial,
+			wantBody:   `{"app_name":"com.tencent.mm"}`,
+		},
+		{
+			name:       "stop app",
+			call:       func(c *Client) error { _, err := c.StopApp("com.tencent.mm"); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/stop_app/" + mobileSerial,
+			wantBody:   `{"app_name":"com.tencent.mm"}`,
+		},
+		{
+			name:       "stop current app",
+			call:       func(c *Client) error { _, err := c.StopCurrentApp(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/stop_current_app/" + mobileSerial,
+		},
+		{
+			name:       "current app",
+			call:       func(c *Client) error { _, err := c.GetCurrentApp(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/current_app/" + mobileSerial,
+		},
+		{
+			name:       "input text",
+			call:       func(c *Client) error { _, err := c.InputText("hello world"); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/input/" + mobileSerial,
+			wantBody:   `{"text":"hello world"}`,
+		},
+		{
+			name:       "clear text",
+			call:       func(c *Client) error { _, err := c.ClearText(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/clear_text/" + mobileSerial,
+		},
+		{
+			name:       "bash",
+			call:       func(c *Client) error { _, err := c.Bash("ls -la"); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/bash/" + mobileSerial,
+			wantBody:   `{"command":"ls -la"}`,
+		},
+		{
+			name:       "dump hierarchy",
+			call:       func(c *Client) error { _, err := c.DumpHierarchy(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/dump_hierarchy/" + mobileSerial,
+		},
+		{
+			name:       "install app",
+			call:       func(c *Client) error { _, err := c.InstallApp("/tmp/app.apk"); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/install_app/" + mobileSerial,
+			wantBody:   `{"app_path":"/tmp/app.apk"}`,
+		},
+		{
+			name:       "install status",
+			call:       func(c *Client) error { _, err := c.InstallStatus("install-42"); return err },
+			wantMethod: http.MethodGet,
+			wantPath:   "/v1/install_status/" + mobileSerial,
+			wantQuery:  map[string]string{"install_id": "install-42"},
+		},
+		{
+			// The CLI posts to /v1/screen; GET is not part of the contract.
+			name:       "screenshot is a POST",
+			call:       func(c *Client) error { _, err := c.GetScreenshot(); return err },
+			wantMethod: http.MethodPost,
+			wantPath:   "/v1/screen/" + mobileSerial,
+		},
+	}
+}
+
+func TestMobileActions(t *testing.T) {
+	runCalls(t, []Option{WithSerial(mobileSerial)}, mobileCases())
+}
+
+func TestGetDeviceInfoReturnsTheBoundSerial(t *testing.T) {
+	r := newRecorder(t)
+	defer r.server.Close()
+	r.response = `{"device":{"serialno":"` + mobileSerial + `"}}`
+
+	info, err := r.client(WithSerial(mobileSerial)).GetDeviceInfo()
 	if err != nil {
 		t.Fatalf("GetDeviceInfo: %v", err)
 	}
-	if info.Serial != "abc123" {
-		t.Errorf("Serial = %q", info.Serial)
+	if info.Serial != mobileSerial {
+		t.Errorf("Serial = %q, want %q", info.Serial, mobileSerial)
 	}
-	if info.Data["status"] != "online" {
-		t.Errorf("Data[status] = %v", info.Data["status"])
-	}
-}
-
-func TestTap(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/tap/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		body, _ := io.ReadAll(r.Body)
-		var got map[string]any
-		json.Unmarshal(body, &got)
-		if got["x"] != float64(100) || got["y"] != float64(200) {
-			t.Errorf("body = %v", got)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.Tap(100, 200)
-	if err != nil {
-		t.Fatalf("Tap: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
+	if info.Data["device"] == nil {
+		t.Error("Data should carry the response payload")
 	}
 }
 
-func TestDoubleTap(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/double_tap/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
+func TestGetScreenshotReturnsBytes(t *testing.T) {
+	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}
+	r := newRecorder(t)
+	defer r.server.Close()
+	r.response = string(jpeg)
 
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.DoubleTap(50, 75)
-	if err != nil {
-		t.Fatalf("DoubleTap: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestLongPress(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/long_press/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.LongPress(100, 200)
-	if err != nil {
-		t.Fatalf("LongPress: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestSwipe(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/swipe/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		body, _ := io.ReadAll(r.Body)
-		var got map[string]any
-		json.Unmarshal(body, &got)
-		if got["x1"] != float64(0) || got["y1"] != float64(500) || got["x2"] != float64(500) || got["y2"] != float64(500) {
-			t.Errorf("body = %v", got)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.Swipe(0, 500, 500, 500)
-	if err != nil {
-		t.Fatalf("Swipe: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestBack(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/back/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.Back()
-	if err != nil {
-		t.Fatalf("Back: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestHome(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/home/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.Home()
-	if err != nil {
-		t.Fatalf("Home: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestLaunchApp(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/launch_app/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		body, _ := io.ReadAll(r.Body)
-		var got map[string]any
-		json.Unmarshal(body, &got)
-		if got["app_name"] != "com.tencent.mm" {
-			t.Errorf("body = %v", got)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.LaunchApp("com.tencent.mm")
-	if err != nil {
-		t.Fatalf("LaunchApp: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestGetCurrentApp(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/current_app/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{
-			"package": "com.tencent.mm",
-		})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	app, err := client.GetCurrentApp()
-	if err != nil {
-		t.Fatalf("GetCurrentApp: %v", err)
-	}
-	if app.Data["package"] != "com.tencent.mm" {
-		t.Errorf("package = %v", app.Data["package"])
-	}
-}
-
-func TestInputText(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/input/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		body, _ := io.ReadAll(r.Body)
-		var got map[string]any
-		json.Unmarshal(body, &got)
-		if got["text"] != "hello" {
-			t.Errorf("body = %v", got)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.InputText("hello")
-	if err != nil {
-		t.Fatalf("InputText: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestClearText(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/clear_text/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{"success": true})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	result, err := client.ClearText()
-	if err != nil {
-		t.Fatalf("ClearText: %v", err)
-	}
-	if !result.Success {
-		t.Error("Success should be true")
-	}
-}
-
-func TestDumpHierarchy(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/dump_hierarchy/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		json.NewEncoder(w).Encode(map[string]any{
-			"hierarchy": "<node/>",
-		})
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	info, err := client.DumpHierarchy()
-	if err != nil {
-		t.Fatalf("DumpHierarchy: %v", err)
-	}
-	if info.Data["hierarchy"] != "<node/>" {
-		t.Errorf("hierarchy = %v", info.Data["hierarchy"])
-	}
-}
-
-func TestGetScreenshot(t *testing.T) {
-	jpegData := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00}
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Method = %q, want GET", r.Method)
-		}
-		if r.URL.Path != "/v1/screen/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "image/jpeg")
-		w.Write(jpegData)
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	data, err := client.GetScreenshot()
+	data, err := r.client(WithSerial(mobileSerial)).GetScreenshot()
 	if err != nil {
 		t.Fatalf("GetScreenshot: %v", err)
 	}
-	if string(data) != string(jpegData) {
-		t.Errorf("screenshot = %v, want %v", data, jpegData)
+	if string(data) != string(jpeg) {
+		t.Errorf("data = %v, want %v", data, jpeg)
 	}
 }
 
-func TestDownloadScreenshot(t *testing.T) {
-	jpegData := []byte{0xFF, 0xD8, 0xFF}
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Method = %q, want GET", r.Method)
-		}
-		if r.URL.Path != "/v1/screenshot/dev1" {
-			t.Errorf("Path = %q", r.URL.Path)
-		}
-		w.Write(jpegData)
-	})
-	defer ms.server.Close()
-
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	data, err := client.DownloadScreenshot()
-	if err != nil {
-		t.Fatalf("DownloadScreenshot: %v", err)
+// Success mirrors a top-level "success" field when the server sends one. The
+// control API's envelope has no such field — it reports failures through a
+// non-2xx "code", which the transport raises as a BusinessError — so the flag
+// defaults to true and only an explicit false flips it.
+func TestOperationResultReadsTheSuccessFlag(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		success bool
+	}{
+		{"explicit false", `{"success":false}`, false},
+		{"explicit true", `{"success":true}`, true},
+		{"absent defaults to true", `{"code":200,"message":"success","data":{}}`, true},
 	}
-	if string(data) != string(jpegData) {
-		t.Errorf("data = %v, want %v", data, jpegData)
-	}
-}
 
-func TestClientErrorPropagation(t *testing.T) {
-	ms := newMockServer(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
-	})
-	defer ms.server.Close()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newRecorder(t)
+			defer r.server.Close()
+			r.response = tt.body
 
-	client := NewClient(WithAPIKey("key"), WithSerial("dev1"), WithBaseURL(ms.server.URL))
-	_, err := client.GetDeviceInfo()
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	var dnfe *DeviceNotFoundError
-	if !errors.As(err, &dnfe) {
-		t.Errorf("error type = %T, want DeviceNotFoundError", err)
+			result, err := r.client(WithSerial(mobileSerial)).Back()
+			if err != nil {
+				t.Fatalf("Back: %v", err)
+			}
+			if result.Success != tt.success {
+				t.Errorf("Success = %v, want %v", result.Success, tt.success)
+			}
+		})
 	}
 }
