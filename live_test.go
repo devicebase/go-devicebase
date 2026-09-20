@@ -87,7 +87,7 @@ func TestLiveListDevicesFilters(t *testing.T) {
 func TestLiveMobileReadOnly(t *testing.T) {
 	client := requireLive(t)
 	device := firstDevice(t, client, "mobile")
-	client = NewClient(WithSerial(device.Serialno))
+	client = NewClient(WithSerialno(device.Serialno))
 
 	if info, err := client.GetDeviceInfo(); err != nil {
 		t.Errorf("GetDeviceInfo: %v", err)

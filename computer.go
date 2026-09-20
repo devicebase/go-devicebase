@@ -7,9 +7,9 @@ import (
 
 // Computer (desktop) platform client.
 //
-// Path family: POST/GET /api/computer/{serial}/{action}.
+// Path family: POST/GET /api/computer/{serialno}/{action}.
 //
-// The serial is the platform serialno of a registered computer device — the
+// The serialno is the platform serialno of a registered computer device — the
 // serialno field from ListDevices with Type "computer". Coordinates are
 // absolute screen pixels. The read-only actions (position, screen_size,
 // permissions) carry no body.
@@ -41,94 +41,94 @@ func waitTimeout(ms int) time.Duration {
 	return time.Duration(ms)*time.Millisecond + actionTimeoutMargin
 }
 
-// computerPath builds /api/computer/{serial}/{action}.
-func computerPath(action, serial string) string {
-	return fmt.Sprintf("/api/computer/%s/%s", serial, action)
+// computerPath builds /api/computer/{serialno}/{action}.
+func computerPath(action, serialno string) string {
+	return fmt.Sprintf("/api/computer/%s/%s", serialno, action)
 }
 
 // --- Mouse ----------------------------------------------------------------
 
 // ComputerClick clicks at absolute screen coordinates. An empty Button is
 // omitted and the server defaults it to ButtonLeft.
-func (c *Client) ComputerClick(serial string, req ComputerClickRequest) (*OperationResult, error) {
-	return c.doOperation(computerPath("click", serial), req)
+func (c *Client) ComputerClick(serialno string, req ComputerClickRequest) (*OperationResult, error) {
+	return c.doOperation(computerPath("click", serialno), req)
 }
 
 // ComputerDoubleClick double clicks at absolute screen coordinates (left button).
-func (c *Client) ComputerDoubleClick(serial string, p Point) (*OperationResult, error) {
-	return c.doOperation(computerPath("double_click", serial), p)
+func (c *Client) ComputerDoubleClick(serialno string, p Point) (*OperationResult, error) {
+	return c.doOperation(computerPath("double_click", serialno), p)
 }
 
 // ComputerLongClick presses and holds the left button at the coordinates.
 // A zero Duration is omitted, leaving the driver default.
-func (c *Client) ComputerLongClick(serial string, req ComputerLongClickRequest) (*OperationResult, error) {
-	return c.doOperation(computerPath("long_click", serial), req)
+func (c *Client) ComputerLongClick(serialno string, req ComputerLongClickRequest) (*OperationResult, error) {
+	return c.doOperation(computerPath("long_click", serialno), req)
 }
 
 // ComputerMove moves the mouse to absolute screen coordinates without clicking.
-func (c *Client) ComputerMove(serial string, p Point) (*OperationResult, error) {
-	return c.doOperation(computerPath("move", serial), p)
+func (c *Client) ComputerMove(serialno string, p Point) (*OperationResult, error) {
+	return c.doOperation(computerPath("move", serialno), p)
 }
 
 // ComputerDrag presses the left button at (x1,y1), moves to (x2,y2) and releases.
-func (c *Client) ComputerDrag(serial string, b Bounds) (*OperationResult, error) {
-	return c.doOperation(computerPath("drag", serial), b)
+func (c *Client) ComputerDrag(serialno string, b Bounds) (*OperationResult, error) {
+	return c.doOperation(computerPath("drag", serialno), b)
 }
 
 // ComputerScroll scrolls the mouse wheel. Direction is one of ScrollUp,
 // ScrollDown, ScrollLeft, ScrollRight; a zero Amount is omitted.
-func (c *Client) ComputerScroll(serial string, req ScrollRequest) (*OperationResult, error) {
-	return c.doOperation(computerPath("scroll", serial), req)
+func (c *Client) ComputerScroll(serialno string, req ScrollRequest) (*OperationResult, error) {
+	return c.doOperation(computerPath("scroll", serialno), req)
 }
 
 // --- Keyboard -------------------------------------------------------------
 
 // ComputerTypeText types text at the current caret of the focused app.
-func (c *Client) ComputerTypeText(serial, text string) (*OperationResult, error) {
-	return c.doOperation(computerPath("type_text", serial), InputTextRequest{Text: text})
+func (c *Client) ComputerTypeText(serialno, text string) (*OperationResult, error) {
+	return c.doOperation(computerPath("type_text", serialno), InputTextRequest{Text: text})
 }
 
 // ComputerPress presses a single key, e.g. "Enter" or "F5".
-func (c *Client) ComputerPress(serial, key string) (*OperationResult, error) {
-	return c.doOperation(computerPath("press", serial), PressRequest{Key: key})
+func (c *Client) ComputerPress(serialno, key string) (*OperationResult, error) {
+	return c.doOperation(computerPath("press", serialno), PressRequest{Key: key})
 }
 
 // ComputerHotkey presses the given keys together.
-func (c *Client) ComputerHotkey(serial string, keys []string) (*OperationResult, error) {
-	return c.doOperation(computerPath("hotkey", serial), KeysRequest{Keys: keys})
+func (c *Client) ComputerHotkey(serialno string, keys []string) (*OperationResult, error) {
+	return c.doOperation(computerPath("hotkey", serialno), KeysRequest{Keys: keys})
 }
 
 // --- System ---------------------------------------------------------------
 
 // ComputerPosition returns the current mouse position.
-func (c *Client) ComputerPosition(serial string) (*OperationResult, error) {
-	return c.doGetOperation(computerPath("position", serial))
+func (c *Client) ComputerPosition(serialno string) (*OperationResult, error) {
+	return c.doGetOperation(computerPath("position", serialno))
 }
 
 // ComputerScreenSize returns the primary screen size.
-func (c *Client) ComputerScreenSize(serial string) (*OperationResult, error) {
-	return c.doGetOperation(computerPath("screen_size", serial))
+func (c *Client) ComputerScreenSize(serialno string) (*OperationResult, error) {
+	return c.doGetOperation(computerPath("screen_size", serialno))
 }
 
 // ComputerPermissions returns the desktop-control permission status.
-func (c *Client) ComputerPermissions(serial string) (*OperationResult, error) {
-	return c.doGetOperation(computerPath("permissions", serial))
+func (c *Client) ComputerPermissions(serialno string) (*OperationResult, error) {
+	return c.doGetOperation(computerPath("permissions", serialno))
 }
 
 // ComputerLaunchApp launches a desktop application.
-func (c *Client) ComputerLaunchApp(serial, appName string) (*OperationResult, error) {
-	return c.doOperation(computerPath("launch_app", serial), LaunchAppRequest{AppName: appName})
+func (c *Client) ComputerLaunchApp(serialno, appName string) (*OperationResult, error) {
+	return c.doOperation(computerPath("launch_app", serialno), LaunchAppRequest{AppName: appName})
 }
 
 // ComputerWait blocks for the given duration in milliseconds.
 //
 // The transport deadline is widened to cover the wait itself — the 30s default
 // would abort any wait longer than that while the server is still sleeping.
-func (c *Client) ComputerWait(serial string, ms int) (*OperationResult, error) {
+func (c *Client) ComputerWait(serialno string, ms int) (*OperationResult, error) {
 	return c.doOperationWith(
 		c.http.withTimeout(waitTimeout(ms)),
 		"POST",
-		computerPath("wait", serial),
+		computerPath("wait", serialno),
 		WaitRequest{Seconds: float64(ms) / 1000},
 	)
 }
@@ -142,11 +142,11 @@ func (c *Client) ComputerWait(serial string, ms int) (*OperationResult, error) {
 // cover it. The command's own exit status comes back in the payload as
 // data.exitCode — a non-zero value is not an API error, so this returns no
 // error for it.
-func (c *Client) ComputerBash(serial, command string, timeoutSeconds int) (*OperationResult, error) {
+func (c *Client) ComputerBash(serialno, command string, timeoutSeconds int) (*OperationResult, error) {
 	return c.doOperationWith(
 		c.http.withTimeout(bashTimeout(timeoutSeconds)),
 		"POST",
-		computerPath("bash", serial),
+		computerPath("bash", serialno),
 		ComputerBashRequest{Command: command, Timeout: timeoutSeconds},
 	)
 }

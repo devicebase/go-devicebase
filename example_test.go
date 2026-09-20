@@ -10,13 +10,13 @@ import (
 func ExampleNewClient() {
 	client := devicebase.NewClient(
 		devicebase.WithAPIKey("your-api-key"),
-		devicebase.WithSerial("db-mttul4i41di8"),
+		devicebase.WithSerialno("db-mttul4i41di8"),
 	)
 	_ = client
 }
 
 // ExampleClient_ListDevices discovers a serialno — the first step for every
-// platform, and the only method that works without a bound serial.
+// platform, and the only method that works without a bound serialno.
 func ExampleClient_ListDevices() {
 	client := devicebase.NewClient(
 		devicebase.WithAPIKey(os.Getenv("DEVICEBASE_API_KEY")),
@@ -35,7 +35,7 @@ func ExampleClient_ListDevices() {
 func ExampleClient_GetDeviceInfo() {
 	client := devicebase.NewClient(
 		devicebase.WithAPIKey(os.Getenv("DEVICEBASE_API_KEY")),
-		devicebase.WithSerial("device123"),
+		devicebase.WithSerialno("device123"),
 	)
 
 	info, err := client.GetDeviceInfo()
@@ -43,13 +43,13 @@ func ExampleClient_GetDeviceInfo() {
 		fmt.Println("error:", err)
 		return
 	}
-	fmt.Println("device:", info.Serial)
+	fmt.Println("device:", info.Serialno)
 }
 
 func ExampleClient_Tap() {
 	client := devicebase.NewClient(
 		devicebase.WithAPIKey("your-api-key"),
-		devicebase.WithSerial("device123"),
+		devicebase.WithSerialno("device123"),
 	)
 
 	result, err := client.Tap(100, 200)
@@ -63,7 +63,7 @@ func ExampleClient_Tap() {
 func ExampleClient_LaunchApp() {
 	client := devicebase.NewClient(
 		devicebase.WithAPIKey("your-api-key"),
-		devicebase.WithSerial("device123"),
+		devicebase.WithSerialno("device123"),
 	)
 
 	result, err := client.LaunchApp("com.tencent.mm")
@@ -77,7 +77,7 @@ func ExampleClient_LaunchApp() {
 func ExampleClient_Swipe() {
 	client := devicebase.NewClient(
 		devicebase.WithAPIKey("your-api-key"),
-		devicebase.WithSerial("device123"),
+		devicebase.WithSerialno("device123"),
 	)
 
 	result, err := client.Swipe(0, 500, 500, 500)
@@ -91,7 +91,7 @@ func ExampleClient_Swipe() {
 func ExampleClient_GetScreenshot() {
 	client := devicebase.NewClient(
 		devicebase.WithAPIKey("your-api-key"),
-		devicebase.WithSerial("device123"),
+		devicebase.WithSerialno("device123"),
 	)
 
 	screenshot, err := client.GetScreenshot()

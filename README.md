@@ -29,7 +29,7 @@ import (
 func main() {
     client := devicebase.NewClient(
         devicebase.WithAPIKey("your-api-key"),
-        devicebase.WithSerial("db-mttul4i41di8"),
+        devicebase.WithSerialno("db-mttul4i41di8"),
     )
 
     info, err := client.GetDeviceInfo()
@@ -55,7 +55,7 @@ func main() {
 
 ## Finding a device
 
-`ListDevices` is the entry point: it is the only call that needs no serial, and it is how a `serialno` is discovered. Filters are resolved server-side.
+`ListDevices` is the entry point: it is the only call that needs no serialno, and it is how a `serialno` is discovered. Filters are resolved server-side.
 
 ```go
 devices, err := client.ListDevices(devicebase.ListDevicesRequest{
@@ -81,7 +81,7 @@ The device identifier is the **`serialno`** field (e.g. `db-mttul4i41di8`), whic
 ```go
 client := devicebase.NewClient(
     devicebase.WithAPIKey("your-api-key"),               // Optional: falls back to DEVICEBASE_API_KEY
-    devicebase.WithSerial("db-mttul4i41di8"),            // Optional: for the mobile methods
+    devicebase.WithSerialno("db-mttul4i41di8"),            // Optional: for the mobile methods
     devicebase.WithBaseURL("https://api.devicebase.cn"), // Optional, default shown
     devicebase.WithTimeout(30 * time.Second),            // Optional, default shown
     devicebase.WithHTTPClient(httpClient),               // Optional
@@ -93,7 +93,16 @@ Environment variables are used as fallbacks:
 - `DEVICEBASE_API_KEY` — API key for authentication
 - `DEVICEBASE_BASE_URL` — API base URL (default: `https://api.devicebase.cn`)
 
-`WithSerial` binds a device for the **mobile** methods only. The browser, computer and list methods take the serialno per call, so one client can drive many devices across platforms:
+`WithSerialno` binds a device for the **mobile** methods only. The browser, computer and list methods take the serialno per call, so one client can drive many devices across platforms:
+
+> **Renamed:** `WithSerial` → `WithSerialno`, `Client.Serial()` → `Client.Serialno()`,
+> `DeviceInfo.Serial` → `DeviceInfo.Serialno`. The old names are kept as
+> deprecated aliases and are removed in the next major release. Positional
+> arguments are unaffected.
+>
+> `Device` also accepts the legacy `serial` key in a device-list row. The older
+> Python service sends that spelling; without the fallback it decoded to an
+> empty `Serialno`.
 
 ```go
 client := devicebase.NewClient(devicebase.WithAPIKey("your-api-key"))

@@ -53,7 +53,7 @@ func TestHTTPClientDoJSONEmptyResponse(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient(server.URL, "key", nil)
-	data, err := client.doJSON(http.MethodPost, "/v1/back/serial", nil)
+	data, err := client.doJSON(http.MethodPost, "/v1/back/serialno", nil)
 	if err != nil {
 		t.Fatalf("doJSON: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestHTTPClientDoRaw(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient(server.URL, "key", nil)
-	data, err := client.doRaw(http.MethodPost, "/v1/screen/serial")
+	data, err := client.doRaw(http.MethodPost, "/v1/screen/serialno")
 	if err != nil {
 		t.Fatalf("doRaw: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestHTTPClientDoRawSurfacesAnEnvelopeError(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient(server.URL, "key", nil)
-	_, err := client.doRaw(http.MethodPost, "/v1/screen/serial")
+	_, err := client.doRaw(http.MethodPost, "/v1/screen/serialno")
 	if err == nil {
 		t.Fatal("expected the envelope's non-2xx code to raise an error")
 	}
@@ -192,7 +192,7 @@ func TestHTTPClientRejectsAMissingAPIKey(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient(server.URL, "", nil)
-	_, err := client.doJSON(http.MethodPost, "/v1/back/serial", nil)
+	_, err := client.doJSON(http.MethodPost, "/v1/back/serialno", nil)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -230,7 +230,7 @@ func TestHTTPClientErrorsCarryTheServerBody(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient(server.URL, "key", nil)
-	_, err := client.doJSON(http.MethodPost, "/v1/test/serial", nil)
+	_, err := client.doJSON(http.MethodPost, "/v1/test/serialno", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -247,7 +247,7 @@ func TestHTTPClientDeviceNotFoundError(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient(server.URL, "key", nil)
-	_, err := client.doJSON(http.MethodPost, "/v1/test/serial", nil)
+	_, err := client.doJSON(http.MethodPost, "/v1/test/serialno", nil)
 
 	var notFoundErr *DeviceNotFoundError
 	if !isErrorType(err, &notFoundErr) {
@@ -259,7 +259,7 @@ func TestHTTPClientValidationError(t *testing.T) {
 	for _, status := range []int{400, 422} {
 		server := newStatusServer(status)
 		client := newHTTPClient(server.URL, "key", nil)
-		_, err := client.doJSON(http.MethodPost, "/v1/test/serial", nil)
+		_, err := client.doJSON(http.MethodPost, "/v1/test/serialno", nil)
 
 		var valErr *ValidationError
 		if !isErrorType(err, &valErr) {
@@ -274,7 +274,7 @@ func TestHTTPClientGenericError(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient(server.URL, "key", nil)
-	_, err := client.doJSON(http.MethodPost, "/v1/test/serial", nil)
+	_, err := client.doJSON(http.MethodPost, "/v1/test/serialno", nil)
 
 	var baseErr *Error
 	if !isErrorType(err, &baseErr) {

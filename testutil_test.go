@@ -90,7 +90,7 @@ type callCase struct {
 
 // runCalls exercises each case against a fresh recording server. opts are
 // applied to the client under test — the mobile actions need WithSerial, while
-// the browser and computer actions take their serial per call.
+// the browser and computer actions take their serialno per call.
 func runCalls(t *testing.T, opts []Option, cases []callCase) {
 	t.Helper()
 

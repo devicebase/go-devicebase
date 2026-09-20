@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The live browser-device serial, used only for readable paths in assertions.
+// The live browser-device serialno, used only for readable paths in assertions.
 const browserSerial = "db-mtsi49bf0mqb"
 
 func browserCases() []callCase {

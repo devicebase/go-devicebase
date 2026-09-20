@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// The live computer-device serial, used only for readable paths in assertions.
+// The live computer-device serialno, used only for readable paths in assertions.
 const computerSerial = "db-mtthisv311f1"
 
 func computerCases() []callCase {

@@ -49,8 +49,8 @@ func (ts Timestamp) MarshalJSON() ([]byte, error) {
 
 // DeviceInfo contains device status, hardware info, and connection state.
 type DeviceInfo struct {
-	Serial string
-	Data   map[string]any
+	Serialno string
+	Data     map[string]any
 }
 
 // AppInfo contains information about the currently running application.
@@ -72,8 +72,8 @@ type OperationResult struct {
 // Device is one row from the device list.
 //
 // Serialno is the platform-issued identifier (e.g. "db-mttul4i41di8") and is
-// what every control method takes. DeviceSN is the physical serial — the
-// gateway resolves either, but Serialno is the primary key.
+// what every control method takes. DeviceSN is the physical serial number —
+// the gateway resolves either, but Serialno is the primary key.
 type Device struct {
 	ID        int       `json:"id"`
 	Serialno  string    `json:"serialno"`
@@ -92,6 +92,28 @@ type Device struct {
 	Operator  string    `json:"operator"`
 	Network   string    `json:"network"`
 	UpdatedAt Timestamp `json:"updated_at"`
+}
+
+// UnmarshalJSON reads the identifier from either spelling of the key.
+//
+// The current service sends "serialno"; the older Python service sends
+// "serial" for the same column. Without the fallback, Serialno decodes to ""
+// against the older service and every list-driven lookup silently breaks.
+func (d *Device) UnmarshalJSON(data []byte) error {
+	// An alias type, so decoding does not recurse back into this method.
+	type deviceAlias Device
+	aux := struct {
+		*deviceAlias
+		LegacySerial string `json:"serial"`
+	}{deviceAlias: (*deviceAlias)(d)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if d.Serialno == "" {
+		d.Serialno = aux.LegacySerial
+	}
+	return nil
 }
 
 // --- Geometry -------------------------------------------------------------

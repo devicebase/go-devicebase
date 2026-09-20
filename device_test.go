@@ -177,3 +177,50 @@ func TestListDevicesOnAnEmptyList(t *testing.T) {
 		t.Errorf("len(devices) = %d, want 0", len(devices))
 	}
 }
+
+// The older Python service sends the identifier as "serial" rather than
+// "serialno". Without the fallback in Device.UnmarshalJSON, Serialno decodes to
+// "" and every list-driven lookup silently breaks against that deployment.
+func TestListDevicesAcceptsTheLegacySerialKey(t *testing.T) {
+	r := newRecorder(t)
+	defer r.server.Close()
+	r.response = `{
+		"code": 200,
+		"message": "success",
+		"data": [
+			{"id": 1, "serial": "LEGACY-001", "state": "free", "device_sn": "sn-1"}
+		]
+	}`
+
+	devices, err := r.client().ListDevices(ListDevicesRequest{})
+	if err != nil {
+		t.Fatalf("ListDevices: %v", err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("len(devices) = %d, want 1", len(devices))
+	}
+	if devices[0].Serialno != "LEGACY-001" {
+		t.Errorf("Serialno = %q, want LEGACY-001", devices[0].Serialno)
+	}
+}
+
+// When a response carries both keys, the platform key is the authoritative one.
+func TestListDevicesPrefersSerialnoOverTheLegacyKey(t *testing.T) {
+	r := newRecorder(t)
+	defer r.server.Close()
+	r.response = `{
+		"code": 200,
+		"message": "success",
+		"data": [
+			{"id": 1, "serialno": "db-primary", "serial": "legacy-other", "state": "free"}
+		]
+	}`
+
+	devices, err := r.client().ListDevices(ListDevicesRequest{})
+	if err != nil {
+		t.Fatalf("ListDevices: %v", err)
+	}
+	if devices[0].Serialno != "db-primary" {
+		t.Errorf("Serialno = %q, want db-primary", devices[0].Serialno)
+	}
+}

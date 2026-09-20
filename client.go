@@ -2,12 +2,12 @@
 //
 // Three device platforms are covered, each with its own path family:
 //
-//	mobile   (Android / HarmonyOS / iOS)  /v1/{action}/{serial}
-//	browser  (Chrome / Chromium / Edge)    /api/browser/{serial}/{action...}
-//	computer (macOS / Windows / Linux)     /api/computer/{serial}/{action}
+//	mobile   (Android / HarmonyOS / iOS)  /v1/{action}/{serialno}
+//	browser  (Chrome / Chromium / Edge)    /api/browser/{serialno}/{action...}
+//	computer (macOS / Windows / Linux)     /api/computer/{serialno}/{action}
 //
-// The mobile methods are bound to the serial given by WithSerial; browser,
-// computer and list methods take the serial per call, because a serialno is
+// The mobile methods are bound to the serialno given by WithSerialno; browser,
+// computer and list methods take the serialno per call, because a serialno is
 // only meaningful within one platform family.
 package devicebase
 
@@ -27,8 +27,8 @@ const envAPIKey = "DEVICEBASE_API_KEY"
 // It is safe to reuse across devices: the browser, computer and list methods
 // take the device's serialno explicitly, so one client can drive many devices.
 type Client struct {
-	serial string
-	http   *httpClient
+	serialno string
+	http     *httpClient
 }
 
 // Option configures a Client.
@@ -40,14 +40,19 @@ func WithAPIKey(key string) Option {
 	return func(c *Client) { c.http.apiKey = key }
 }
 
-// WithSerial sets the device serial used by the mobile methods.
+// WithSerialno sets the device serialno used by the mobile methods.
 //
 // The server keys devices by "serialno" (e.g. "db-mttul4i41di8"); the device's
-// device_sn UUID resolves too. Devices without a bound serial can still use the
-// browser, computer and list methods, which take a serial per call.
-func WithSerial(serial string) Option {
-	return func(c *Client) { c.serial = serial }
+// device_sn UUID resolves too. Devices without a bound serialno can still use the
+// browser, computer and list methods, which take a serialno per call.
+func WithSerialno(serialno string) Option {
+	return func(c *Client) { c.serialno = serialno }
 }
+
+// WithSerial is an alias for [WithSerialno].
+//
+// Deprecated: use WithSerialno. Removed in the next major release.
+func WithSerial(serial string) Option { return WithSerialno(serial) }
 
 // WithBaseURL sets the API base URL.
 // Falls back to the DEVICEBASE_BASE_URL environment variable, or https://api.devicebase.cn.
@@ -101,8 +106,13 @@ func NewClient(opts ...Option) *Client {
 	return c
 }
 
-// Serial returns the serial bound by WithSerial.
-func (c *Client) Serial() string { return c.serial }
+// Serialno returns the serialno bound by [WithSerialno].
+func (c *Client) Serialno() string { return c.serialno }
+
+// Serial is an alias for [Client.Serialno].
+//
+// Deprecated: use Serialno. Removed in the next major release.
+func (c *Client) Serial() string { return c.serialno }
 
 // --- Mobile ---------------------------------------------------------------
 
@@ -112,7 +122,7 @@ func (c *Client) GetDeviceInfo() (*DeviceInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DeviceInfo{Serial: c.serial, Data: data}, nil
+	return &DeviceInfo{Serialno: c.serialno, Data: data}, nil
 }
 
 // Tap performs a single tap at the specified coordinates.
@@ -220,16 +230,16 @@ func (c *Client) GetScreenshot() ([]byte, error) {
 // DownloadScreenshot downloads a screenshot as a file attachment.
 //
 // This is an SDK-only extra with no equivalent in the Devicebase CLI: it hits
-// GET /v1/screenshot/{serial} rather than the cross-family /v1/screen route.
+// GET /v1/screenshot/{serialno} rather than the cross-family /v1/screen route.
 func (c *Client) DownloadScreenshot() ([]byte, error) {
-	return c.http.doRaw(http.MethodGet, fmt.Sprintf("/v1/screenshot/%s", c.serial))
+	return c.http.doRaw(http.MethodGet, fmt.Sprintf("/v1/screenshot/%s", c.serialno))
 }
 
-// mobilePath builds /v1/{action}/{serial} — the mobile route family. The
+// mobilePath builds /v1/{action}/{serialno} — the mobile route family. The
 // control server registers these paths and redirects them to the /api/*
 // handlers, so the method and body survive the hop.
 func (c *Client) mobilePath(action string) string {
-	return fmt.Sprintf("/v1/%s/%s", action, c.serial)
+	return fmt.Sprintf("/v1/%s/%s", action, c.serialno)
 }
 
 func (c *Client) doOperation(path string, body any) (*OperationResult, error) {

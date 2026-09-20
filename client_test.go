@@ -10,9 +10,9 @@ func TestNewClientDefaults(t *testing.T) {
 	t.Setenv("DEVICEBASE_API_KEY", "env-key")
 	t.Setenv(envBaseURL, "")
 
-	client := NewClient(WithSerial("device123"))
-	if client.Serial() != "device123" {
-		t.Errorf("serial = %q, want %q", client.Serial(), "device123")
+	client := NewClient(WithSerialno("device123"))
+	if client.Serialno() != "device123" {
+		t.Errorf("serialno = %q, want %q", client.Serialno(), "device123")
 	}
 	if client.http.apiKey != "env-key" {
 		t.Errorf("apiKey = %q, want %q", client.http.apiKey, "env-key")
@@ -38,15 +38,15 @@ func TestNewClientReadsBaseURLFromEnv(t *testing.T) {
 func TestNewClientOverrides(t *testing.T) {
 	client := NewClient(
 		WithAPIKey("my-key"),
-		WithSerial("serial-1"),
+		WithSerialno("serialno-1"),
 		WithBaseURL("http://localhost:8080/"),
 		WithTimeout(5*time.Second),
 	)
 	if client.http.apiKey != "my-key" {
 		t.Errorf("apiKey = %q", client.http.apiKey)
 	}
-	if client.Serial() != "serial-1" {
-		t.Errorf("serial = %q", client.Serial())
+	if client.Serialno() != "serialno-1" {
+		t.Errorf("serialno = %q", client.Serialno())
 	}
 	// A trailing slash would turn every appended path into "//v1/…".
 	if client.http.baseURL != "http://localhost:8080" {
@@ -63,7 +63,7 @@ func TestNewClientWithoutAKeyFailsOnFirstUse(t *testing.T) {
 	t.Setenv(envAPIKey, "")
 	t.Setenv(envBaseURL, "http://127.0.0.1:1")
 
-	client := NewClient(WithSerial("s"))
+	client := NewClient(WithSerialno("s"))
 	if _, err := client.Back(); err == nil {
 		t.Fatal("expected an AuthenticationError")
 	}
@@ -198,7 +198,7 @@ func mobileCases() []callCase {
 }
 
 func TestMobileActions(t *testing.T) {
-	runCalls(t, []Option{WithSerial(mobileSerial)}, mobileCases())
+	runCalls(t, []Option{WithSerialno(mobileSerial)}, mobileCases())
 }
 
 func TestGetDeviceInfoReturnsTheBoundSerial(t *testing.T) {
@@ -206,12 +206,12 @@ func TestGetDeviceInfoReturnsTheBoundSerial(t *testing.T) {
 	defer r.server.Close()
 	r.response = `{"device":{"serialno":"` + mobileSerial + `"}}`
 
-	info, err := r.client(WithSerial(mobileSerial)).GetDeviceInfo()
+	info, err := r.client(WithSerialno(mobileSerial)).GetDeviceInfo()
 	if err != nil {
 		t.Fatalf("GetDeviceInfo: %v", err)
 	}
-	if info.Serial != mobileSerial {
-		t.Errorf("Serial = %q, want %q", info.Serial, mobileSerial)
+	if info.Serialno != mobileSerial {
+		t.Errorf("Serialno = %q, want %q", info.Serialno, mobileSerial)
 	}
 	if info.Data["device"] == nil {
 		t.Error("Data should carry the response payload")
@@ -224,7 +224,7 @@ func TestGetScreenshotReturnsBytes(t *testing.T) {
 	defer r.server.Close()
 	r.response = string(jpeg)
 
-	data, err := r.client(WithSerial(mobileSerial)).GetScreenshot()
+	data, err := r.client(WithSerialno(mobileSerial)).GetScreenshot()
 	if err != nil {
 		t.Fatalf("GetScreenshot: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestOperationResultReadsTheSuccessFlag(t *testing.T) {
 			defer r.server.Close()
 			r.response = tt.body
 
-			result, err := r.client(WithSerial(mobileSerial)).Back()
+			result, err := r.client(WithSerialno(mobileSerial)).Back()
 			if err != nil {
 				t.Fatalf("Back: %v", err)
 			}
