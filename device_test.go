@@ -224,3 +224,30 @@ func TestListDevicesPrefersSerialnoOverTheLegacyKey(t *testing.T) {
 		t.Errorf("Serialno = %q, want db-primary", devices[0].Serialno)
 	}
 }
+
+// The device list reports whether a browser is one the platform built (a cloud
+// browser) or one attached by hand. Both are type "browser", so nothing else in
+// the row tells them apart — and only the first kind can be deleted through the
+// cloud browser lifecycle.
+func TestListDevicesReportsCloudBrowsers(t *testing.T) {
+	r := newRecorder(t)
+	defer r.server.Close()
+	r.response = `{"code":200,"data":[
+		{"id":1,"serialno":"db-1","type":"browser","is_cloud":true},
+		{"id":2,"serialno":"db-2","type":"browser","is_cloud":false}
+	]}`
+
+	devices, err := r.client().ListDevices(ListDevicesRequest{Type: "browser"})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(devices) != 2 {
+		t.Fatalf("devices = %d, want 2", len(devices))
+	}
+	if !devices[0].IsCloud {
+		t.Error("first device IsCloud = false, want true")
+	}
+	if devices[1].IsCloud {
+		t.Error("second device IsCloud = true, want false")
+	}
+}

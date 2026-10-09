@@ -7,6 +7,7 @@ Go SDK for the [Devicebase](https://github.com/devicebase) device automation API
 | **mobile** | Android, HarmonyOS, iOS | `/v1/{action}/{serialno}` |
 | **browser** | Chrome / Chromium / Edge over CDP | `/api/browser/{serialno}/{action...}` |
 | **computer** | macOS / Windows / Linux desktops | `/api/computer/{serialno}/{action}` |
+| **cloud browser** | browsers the platform runs for you | `/v1/browser/*` |
 
 ## Installation
 
@@ -75,6 +76,8 @@ for _, device := range devices {
 ### Serial numbers
 
 The device identifier is the **`serialno`** field (e.g. `db-mttul4i41di8`), which the server issues. The `device_sn` UUID also resolves — the gateway looks devices up with `WHERE (serialno = ? OR device_sn = ?)` — but `serialno` is the primary key.
+
+Nothing to control? [Create a cloud browser](#cloud-browsers) and the SDK hands you one.
 
 ## Configuration
 
@@ -182,6 +185,51 @@ client.BrowserClose(serialno)
 ```
 
 Editing shortcuts (`Meta a`, `Backspace`) act on the page. Browser-chrome shortcuts such as `Control t` are **not reachable** — CDP drives the page, not the browser UI.
+
+## Cloud Browsers
+
+The methods above drive a browser that already exists. These four build and destroy one — a browser the platform runs for you on its own cluster, over `/v1/browser/*`. A Chrome you attached yourself is not a cloud browser: it does not count against the quota and cannot be deleted through these calls (`Device.IsCloud` tells them apart).
+
+```go
+quota, err := client.CloudBrowserQuota()   // {Limit, Used, Remaining} for this account
+
+created, err := client.CreateCloudBrowser(devicebase.CloudBrowserCreateRequest{
+    Name:       "my-browser",   // optional; the server names it otherwise
+    WindowSize: "1366x768",     // optional; "WxH"
+    // WaitSeconds is how long to wait for it to register before answering
+    // (0-60; nil = the server's default of 15).
+})
+// Creation is asynchronous, so the call waits for it: Serialno is the key every
+// Browser method takes, and Registered says whether it made it in time.
+fmt.Println(created.Serialno, created.AliasName, created.Registered)
+// AliasName is the Name you passed, verbatim. created.Name is the platform's own
+// identity for the machine ("Browser-<serial[0:8]>") — not your name for it.
+
+// If it did not come up in time the call still succeeded — ask again with the
+// device_sn it returned. "Not yet" is a value, never an error, so this is quiet.
+if !created.Registered {
+    status, err := client.CloudBrowserStatus(created.DeviceSN)
+    fmt.Println(status.Registered)
+}
+
+client.BrowserNavigate(created.Serialno, "https://example.com")
+
+err = client.DeleteCloudBrowser(created.Serialno)   // irreversible
+```
+
+A cloud browser is always headless — there is no option for it. `DeleteCloudBrowser`
+accepts either the `serialno` or the `DeviceSN` from creation, and does not wait
+for the machine: the platform queues the reap and the node collects it on its
+next heartbeat, so it succeeds even while the node is offline. Calling it as soon
+as create returns is fine even when `Registered` is false.
+
+Failure modes decide whether a retry is worth it. All of them surface as errors carrying the HTTP status (`*Error.StatusCode`):
+
+| Status | Meaning | Retry? |
+|--------|---------|--------|
+| 409 | Quota exhausted (create), or the identifier is not a cloud browser (delete) | No |
+| 502 | Platform↔node auth failed — signature, key or clock | No; someone has to fix it |
+| 503 | No capacity right now, or the node could not be reached | Yes, later |
 
 ## Computer
 

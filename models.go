@@ -92,6 +92,11 @@ type Device struct {
 	Operator  string    `json:"operator"`
 	Network   string    `json:"network"`
 	UpdatedAt Timestamp `json:"updated_at"`
+	// IsCloud marks a browser the platform built for this account on its own
+	// cluster, as opposed to one attached by hand through the desktop client.
+	// Both are type "browser", so this is the only way to tell them apart — and
+	// the only kind DeleteCloudBrowser accepts.
+	IsCloud bool `json:"is_cloud"`
 }
 
 // UnmarshalJSON reads the identifier from either spelling of the key.
