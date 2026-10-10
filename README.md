@@ -8,6 +8,7 @@ Go SDK for the [Devicebase](https://github.com/devicebase) device automation API
 | **browser** | Chrome / Chromium / Edge over CDP | `/api/browser/{serialno}/{action...}` |
 | **computer** | macOS / Windows / Linux desktops | `/api/computer/{serialno}/{action}` |
 | **cloud browser** | browsers the platform runs for you | `/v1/browser/*` |
+| **account** | your own profile and daily points | `/v1/user/*` |
 
 ## Installation
 
@@ -230,6 +231,35 @@ Failure modes decide whether a retry is worth it. All of them surface as errors 
 | 409 | Quota exhausted (create), or the identifier is not a cloud browser (delete) | No |
 | 502 | Platform↔node auth failed — signature, key or clock | No; someone has to fix it |
 | 503 | No capacity right now, or the node could not be reached | Yes, later |
+
+## Account
+
+The account behind the API key — no device involved, and no serialno to pass: the
+key identifies the account, and it can only ever be your own.
+
+```go
+info, err := client.UserInfo()
+fmt.Println(info.Username, info.Mobile, info.Credits, info.RegisteredAt)
+
+reward, err := client.UserCheckin()
+fmt.Println(reward.Message, reward.CreditsEarned, reward.Credits)
+```
+
+`UserInfo` returns the name (`Username`), phone, points balance (`Credits`),
+registration date and `CanCheckin` — whether today's reward is still unclaimed.
+
+`UserCheckin` claims the daily points: 25 on the first day, +10 per consecutive
+day, up to 95 a day. Claiming twice in one day is **not** an error — the second
+call returns `AlreadyChecked: true`, `CreditsEarned: 0` and the platform's own
+message ("今日已签到"), with nothing granted. That makes it safe to run from a
+daily scheduled task without checking first:
+
+```go
+// cron: 7 9 * * * my-checkin
+if _, err := client.UserCheckin(); err != nil {
+    log.Fatal(err)
+}
+```
 
 ## Computer
 
